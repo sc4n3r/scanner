@@ -564,7 +564,7 @@ def main():
 
     # ---- Validate API key ----
     api_key = os.getenv("SC4N3R_API_KEY", "")
-    api_url = os.getenv("SC4N3R_API_URL", "https://sc4n3r.app/api")
+    api_url = os.getenv("SC4N3R_API_URL", "https://www.sc4n3r.app/api")
     if not api_key:
         print("\n  SC4N3R_API_KEY is required. Get your key at https://sc4n3r.app")
         sys.exit(1)
