@@ -73,8 +73,8 @@ def run_cmd(cmd: list[str], timeout: int = 120) -> tuple[str, str, int]:
 def validate_api_key(api_key: str, api_url: str) -> bool:
     """Validate the scanner API key against the sc4n3r dashboard.
 
-    Returns True if valid, True on network errors (fail-open),
-    False only when the server explicitly rejects the key.
+    Returns True only if the server explicitly confirms the key is valid.
+    Returns False on any error, invalid key, or network failure.
     """
     url = f"{api_url.rstrip('/')}/validate"
     try:
@@ -89,13 +89,14 @@ def validate_api_key(api_key: str, api_url: str) -> bool:
             log.error(f"API key rejected: {data.get('error', 'unknown')}")
             return False
         if resp.status_code in (401, 403):
-            log.error(f"API key invalid ({resp.status_code})")
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            log.error(f"API key invalid: {data.get('error', resp.status_code)}")
             return False
-        log.warning(f"Validation returned {resp.status_code}, continuing")
-        return True
+        log.error(f"Validation returned unexpected status {resp.status_code}")
+        return False
     except requests.RequestException as e:
-        log.warning(f"Validation endpoint unreachable: {e}")
-        return True  # fail-open on network errors
+        log.error(f"Could not reach validation server: {e}")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -564,8 +565,11 @@ def main():
     # ---- Validate API key ----
     api_key = os.getenv("SC4N3R_API_KEY", "")
     api_url = os.getenv("SC4N3R_API_URL", "https://sc4n3r.app/api")
-    if api_key and not validate_api_key(api_key, api_url):
-        print("\n  API key validation failed. Get a key at https://sc4n3r.app")
+    if not api_key:
+        print("\n  SC4N3R_API_KEY is required. Get your key at https://sc4n3r.app")
+        sys.exit(1)
+    if not validate_api_key(api_key, api_url):
+        print("\n  API key validation failed. Check your key at https://sc4n3r.app")
         sys.exit(1)
 
     # ---- Setup solc ----

@@ -12,7 +12,7 @@ inputs:
     required: true
   api_key:
     description: "sc4n3r API key (from dashboard)"
-    required: false
+    required: true
   api_url:
     description: "sc4n3r API URL"
     required: false
