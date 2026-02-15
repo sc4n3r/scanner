@@ -1,0 +1,46 @@
+# sc4n3r Configuration
+# Place this file in your project root. All fields are optional.
+# The scanner auto-detects project type, solidity version, and remappings.
+
+# Override auto-detected solidity version
+# solidity_version: "0.8.20"
+
+# Override auto-detected remappings (Foundry reads remappings.txt / foundry.toml)
+# remappings:
+#   - "@openzeppelin/=lib/openzeppelin-contracts/"
+
+# Commands to run before compilation (install deps, etc.)
+# setup_commands:
+#   - "forge install --no-commit"
+#   - "make install"
+
+# Paths to exclude from scanning
+exclude_paths:
+  - "test/"
+  - "script/"
+  - "mocks/"
+  - "lib/"
+  - "node_modules/"
+
+# Severities to hide from the report
+# Options: informational, low, medium, high, critical
+hide_severities: []
+
+# Fail the CI pipeline on this severity or above
+# Options: critical, high, medium, low, none
+fails_on: "high"
+
+# Deep analysis (disabled by default — slower but more thorough)
+mythril:
+  enabled: false
+  targets: []
+    # - "src/Vault.sol"
+
+# AI enhancement (requires GEMINI_API_KEY)
+ai:
+  enabled: true
+  analyze_severities:
+    - "critical"
+    - "high"
+    - "medium"
+  max_findings: 25

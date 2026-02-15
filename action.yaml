@@ -1,0 +1,48 @@
+name: "sc4n3r Security Scanner"
+description: "Automated Smart Contract Security Audit"
+author: "Haidar Ali"
+
+branding:
+  icon: "shield"
+  color: "orange"
+
+inputs:
+  token:
+    description: "GITHUB_TOKEN for PR comments"
+    required: true
+  api_key:
+    description: "sc4n3r API key (from dashboard)"
+    required: false
+  api_url:
+    description: "sc4n3r API URL"
+    required: false
+    default: "https://sc4n3r.app/api"
+  fail_on:
+    description: "Fail pipeline on severity (critical/high/medium/low/none)"
+    required: false
+    default: "high"
+  no_ai:
+    description: "Disable AI enhancement"
+    required: false
+    default: "false"
+
+outputs:
+  report_path:
+    description: "Path to generated report.md"
+    value: "results/report.md"
+  critical_count:
+    description: "Number of critical findings"
+  high_count:
+    description: "Number of high severity findings"
+  medium_count:
+    description: "Number of medium severity findings"
+  total_count:
+    description: "Total number of findings"
+
+runs:
+  using: "docker"
+  image: "docker://ghcr.io/sc4n3r/scanner:latest"
+  env:
+    GITHUB_TOKEN: ${{ inputs.token }}
+    SC4N3R_API_KEY: ${{ inputs.api_key }}
+    SC4N3R_API_URL: ${{ inputs.api_url }}

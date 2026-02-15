@@ -1,0 +1,56 @@
+# sc4n3r — Default Tool Configuration
+
+contracts:
+  path: "src/"
+  solidity_version: "0.8.20"
+  exclude_paths:
+    - "lib/"
+    - "node_modules/"
+    - "test/"
+    - "script/"
+    - "mocks/"
+
+fails_on: "high"
+hide_severities: []
+
+ai:
+  enabled: true
+  provider: "gemini"
+  model: "gemini-2.0-flash"
+  api_key_env: "GEMINI_API_KEY"
+  analyze_only:
+    - critical
+    - high
+    - medium
+  max_findings: 25
+  timeout: 90
+
+tools:
+  slither:
+    enabled: true
+    timeout: 300
+  aderyn:
+    enabled: true
+    timeout: 120
+  mythril:
+    enabled: false
+    timeout: 600
+  solhint:
+    enabled: true
+    timeout: 120
+
+severity_map:
+  "High": "high"
+  "Medium": "medium"
+  "Low": "low"
+  "Informational": "informational"
+  "Optimization": "informational"
+  "Critical": "critical"
+
+report:
+  output: "results/report.md"
+
+github:
+  post_comment: true
+  inline_comments: true
+  max_comment_size: 65536

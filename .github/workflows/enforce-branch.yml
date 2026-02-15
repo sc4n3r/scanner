@@ -1,0 +1,21 @@
+name: Enforce Branch Rules
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only allow PRs from dev to main
+        if: github.head_ref != 'dev'
+        run: |
+          echo "❌ PRs to main are only allowed from the dev branch."
+          echo "   Source branch: ${{ github.head_ref }}"
+          echo "   Please merge to dev first, then PR dev → main."
+          exit 1
+
+      - name: Source branch valid
+        if: github.head_ref == 'dev'
+        run: echo "✅ PR from dev to main — allowed."

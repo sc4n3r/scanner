@@ -1,0 +1,50 @@
+Business Source License 1.1
+
+Licensor: Haidar Ali / ThirdGenTech
+Licensed Work: sc4n3r Smart Contract Security Scanner
+
+The Licensed Work is (c) 2026 Haidar Ali / ThirdGenTech.
+
+Change License: MIT
+Change Date: February 15, 2030
+
+Grant of Rights
+
+The Licensor hereby grants you the right to copy, modify, create
+derivative works, redistribute, and make non-production use of the
+Licensed Work.
+
+The Licensor hereby grants you the right to make production use of
+the Licensed Work, provided such use does not include offering the
+Licensed Work to third parties on a hosted or embedded basis which
+is competitive with the Licensor's products.
+
+For purposes of this license, "competitive" means a product or
+service that provides smart contract security scanning as its
+primary function.
+
+You may use the Licensed Work:
+- As a GitHub Action in your own repositories
+- For internal security scanning of your own smart contracts
+- For educational and research purposes
+- As part of a product where security scanning is NOT the primary offering
+
+You may NOT use the Licensed Work:
+- To offer a competing smart contract security scanning SaaS
+- To resell or rebrand the scanner as your own product
+
+If your use is not clearly permitted above, please contact the
+Licensor for a commercial license.
+
+Notice
+
+The Business Source License (this document, or the "License") is
+not an Open Source license. However, the Licensed Work will
+eventually be made available under an Open Source License, as
+stated in this License.
+
+On the Change Date, or the fourth anniversary of the first publicly
+available distribution of a specific version of the Licensed Work
+under this License, whichever comes first, the Licensor hereby
+grants you rights under the terms of the Change License, and the
+rights granted in the paragraph above terminate.

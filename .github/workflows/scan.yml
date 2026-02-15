@@ -1,0 +1,25 @@
+name: Reusable Security Scan
+
+on:
+  workflow_call:
+    secrets:
+      SC4N3R_API_KEY:
+        description: "sc4n3r API key for dashboard integration"
+        required: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run sc4n3r Scanner
+        uses: sc4n3r/scanner@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.SC4N3R_API_KEY }}

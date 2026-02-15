@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.DS_Store
+__pycache__
+*.pyc
+*.pyo
+LICENSE
+CHANGELOG.md
+README.md
+sc4n3r.config.yaml
+Test/
+results/
