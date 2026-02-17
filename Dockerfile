@@ -46,13 +46,6 @@ COPY pyproject.toml /app/pyproject.toml
 # Install sc4n3r as a package (registers Slither plugin for custom detectors)
 RUN pip3 install --no-cache-dir /app
 
-# Gemini API key (passed at runtime or build time)
-ARG GEMINI_API_KEY=""
-RUN if [ -n "$GEMINI_API_KEY" ]; then \
-    echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> /etc/environment; \
-    fi
-ENV GEMINI_API_KEY=$GEMINI_API_KEY
-
 WORKDIR /target
 
 ENTRYPOINT ["python3", "/app/entrypoint.py"]

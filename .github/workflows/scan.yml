@@ -6,6 +6,12 @@ on:
       SC4N3R_API_KEY:
         description: "sc4n3r API key for dashboard integration"
         required: false
+      GEMINI_API_KEY:
+        description: "Gemini API key for AI analysis"
+        required: false
+      ANTHROPIC_API_KEY:
+        description: "Anthropic API key for AI analysis"
+        required: false
 
 jobs:
   audit:
@@ -24,6 +30,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.SC4N3R_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Upload SARIF to GitHub Security Tab
         if: always()

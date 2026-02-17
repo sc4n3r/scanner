@@ -8,6 +8,7 @@ on:
       - "audit/**"
       - "entrypoint.py"
       - "action.yaml"
+      - "pyproject.toml"
   release:
     types: [published]
   schedule:
@@ -57,7 +58,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

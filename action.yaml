@@ -21,6 +21,14 @@ inputs:
     description: "Fail pipeline on severity (critical/high/medium/low/none)"
     required: false
     default: "high"
+  gemini_api_key:
+    description: "Gemini API key for AI analysis (if using Gemini provider)"
+    required: false
+    default: ""
+  anthropic_api_key:
+    description: "Anthropic API key for AI analysis (if using Claude provider)"
+    required: false
+    default: ""
   no_ai:
     description: "Disable AI enhancement"
     required: false
@@ -49,3 +57,5 @@ runs:
     GITHUB_TOKEN: ${{ inputs.token }}
     SC4N3R_API_KEY: ${{ inputs.api_key }}
     SC4N3R_API_URL: ${{ inputs.api_url }}
+    GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
