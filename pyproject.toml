@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sc4n3r"
+version = "3.0.0"
+description = "Smart contract security scanner with custom Slither detectors"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.entry-points."slither_analyzer.plugin"]
+sc4n3r = "audit.detectors"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["audit*"]

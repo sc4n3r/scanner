@@ -121,9 +121,21 @@ def _format_finding_detail(finding: Finding, label: str) -> str:
         else:
             parts.append(f"```diff\n{fix}\n```\n")
 
+    # Confidence score
+    if finding.confidence > 0:
+        conf_pct = int(finding.confidence * 100)
+        conf_label = "Verified" if finding.poc_validated else ("High" if conf_pct >= 90 else "Medium" if conf_pct >= 70 else "Low")
+        parts.append(f"**Confidence:** {conf_pct}% ({conf_label})\n")
+
     # PoC
     if finding.poc_code:
-        parts.append("<details>\n<summary>Proof of Concept (Foundry Test)</summary>\n")
+        if finding.poc_validated:
+            parts.append("**Proof of Concept:** Verified — exploit confirmed executable\n")
+        elif finding.poc_compiles:
+            parts.append("**Proof of Concept:** Compiles — test execution pending\n")
+        else:
+            parts.append("**Proof of Concept:** Generated — not yet validated\n")
+        parts.append("<details>\n<summary>PoC Code (Foundry Test)</summary>\n")
         parts.append(f"```solidity\n{finding.poc_code}\n```\n")
         parts.append("</details>\n")
 
@@ -293,6 +305,7 @@ def _generate_attack_chains(chains: list[dict]) -> str:
 def generate_report(
     report: AuditReport, config: dict,
     attack_chains: list[dict] | None = None,
+    checklist_section: str = "",
 ) -> str:
     """Generate the full markdown audit report."""
     today = datetime.now().strftime("%B %d, %Y")
@@ -301,7 +314,7 @@ def generate_report(
     # Header
     s.append("# Smart Contract Security Audit Report\n")
     s.append(f"**Generated:** {today}  ")
-    s.append(f"**Scanner:** sc4n3r v2.0.0  ")
+    s.append(f"**Scanner:** sc4n3r v3.0.0  ")
     s.append(f"**Tools:** {', '.join(report.tools_run) if report.tools_run else 'N/A'}\n")
 
     # Executive summary
@@ -331,6 +344,10 @@ def generate_report(
 
     # OWASP coverage
     s.append(_generate_owasp_coverage(report.findings))
+
+    # Checklist coverage
+    if checklist_section:
+        s.append(checklist_section)
 
     # Detailed sections: critical / high / medium
     for sev_name, prefix, findings in [

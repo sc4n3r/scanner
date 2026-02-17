@@ -119,6 +119,7 @@ def _analyze_finding(
     """Use AI to analyse a single finding. Mutates the Finding in-place.
 
     Uses chain-of-thought prompting with few-shot examples for higher accuracy.
+    Enriched with real-world Solodit findings when available.
     """
     code = _read_code_context(finding.file, finding.line)
 
@@ -129,8 +130,22 @@ def _analyze_finding(
 {protocol_context}
 """
 
+    # Query Solodit for similar real-world findings
+    solodit_section = ""
+    try:
+        from .solodit_client import get_similar_findings, format_as_context
+        similar = get_similar_findings(
+            finding_title=finding.title,
+            severity=finding.severity,
+            max_results=3,
+        )
+        if similar:
+            solodit_section = "\n" + format_as_context(similar) + "\n"
+    except Exception as e:
+        log.debug(f"Solodit context unavailable: {e}")
+
     prompt = f"""You are a senior smart contract security auditor with deep expertise in DeFi exploits, MEV, flash loans, and cross-contract attacks. Analyze this scanner finding using careful step-by-step reasoning.
-{context_section}
+{context_section}{solodit_section}
 ## Finding
 - **Tool:** {finding.tool}
 - **Detector:** {finding.id}
@@ -202,6 +217,16 @@ Respond with ONLY valid JSON (no markdown fences, no extra text):
     finding.suggested_fix = data.get("suggested_fix", "")
     finding.exploitability = data.get("exploitability", "")
     finding.ai_analyzed = True
+
+    # Set confidence score based on AI analysis result
+    if finding.is_false_positive:
+        finding.confidence = 0.1
+    elif finding.ai_confidence == "high":
+        finding.confidence = 0.9
+    elif finding.ai_confidence == "medium":
+        finding.confidence = 0.8
+    else:
+        finding.confidence = 0.7
 
 
 # ---------------------------------------------------------------------------

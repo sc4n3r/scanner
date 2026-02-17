@@ -21,12 +21,14 @@ from .aggregator import aggregate_findings, filter_by_severity
 from .ai_enhancer import enhance_findings
 from .attack_chain import detect_attack_chains
 from .centralization import analyze_centralization
+from .checklist_analyzer import analyze_checklist, generate_checklist_report, load_checklist
 from .defi_analyzer import analyze_defi
 from .github_inline import post_review_comments
 from .models import AuditReport, Finding
 from .owasp_mapping import map_all_findings
 from .parsers import parse_aderyn, parse_mythril, parse_slither, parse_solhint
 from .poc_generator import generate_pocs
+from .poc_validator import validate_pocs
 from .report_generator import generate_pr_comment, generate_report, generate_terminal_report
 from .sarif_generator import save_sarif
 from .token_compliance import analyze_tokens
@@ -600,11 +602,11 @@ def main():
         log.info(f"Remappings: {len(remappings)} entries")
 
     # ---- Step 1: Compile ----
-    print(f"  [1/5] Compiling ({config['project_type']})...")
+    print(f"  [ 1/10] Compiling ({config['project_type']})...")
     compile_project(config["project_type"], config)
 
     # ---- Step 2: Run static analysis tools ----
-    print("  [2/8] Running static analysis...")
+    print("  [ 2/10] Running static analysis...")
     all_findings: list[Finding] = []
     tools_run: list[str] = []
 
@@ -620,7 +622,7 @@ def main():
             tools_run.append(name)
 
     # ---- Step 3: Run sc4n3r custom analyzers ----
-    print("  [3/8] Running advanced analysis...")
+    print("  [ 3/10] Running advanced analysis...")
     analyzers = config.get("analyzers", {})
 
     if analyzers.get("defi", {}).get("enabled", True):
@@ -647,35 +649,60 @@ def main():
             all_findings.extend(token_findings)
             tools_run.append("sc4n3r-Token")
 
-    # ---- Step 4: Aggregate ----
-    print("  [4/8] Aggregating results...")
+    # ---- Step 4: Checklist-driven analysis ----
+    print("  [ 4/10] Running audit checklist (380+ checks)...")
+    checklist_findings, checklist_coverage = analyze_checklist(config)
+    if checklist_findings:
+        all_findings.extend(checklist_findings)
+        tools_run.append("sc4n3r-Checklist")
+
+    # ---- Step 5: Aggregate ----
+    print("  [ 5/10] Aggregating results...")
     deduped = aggregate_findings(all_findings)
+
+    # Set baseline confidence for static analysis findings
+    for f in deduped:
+        if f.confidence == 0.0:
+            f.confidence = 0.7  # Static analysis baseline
 
     hide = config.get("hide_severities", [])
     if hide:
         deduped = filter_by_severity(deduped, hide)
         log.info(f"After severity filter: {len(deduped)}")
 
-    # ---- Step 5: Map to standards ----
-    print("  [5/8] Mapping to OWASP / SWC standards...")
+    # ---- Step 6: Map to standards ----
+    print("  [ 6/10] Mapping to OWASP / SWC standards...")
     deduped = map_all_findings(deduped)
 
-    # ---- Step 6: AI enhancement ----
-    print("  [6/8] AI analysis...")
+    # ---- Step 7: AI enhancement (Solodit-enriched) ----
+    print("  [ 7/10] AI analysis (Solodit-enriched)...")
     enhanced = enhance_findings(deduped, config)
 
-    # ---- Step 6b: Attack chains ----
+    # ---- Step 7b: Attack chains ----
     attack_chains = detect_attack_chains(enhanced, config)
 
-    # ---- Step 6c: Generate PoCs ----
+    # ---- Step 7c: Generate PoCs ----
     enhanced = generate_pocs(enhanced, config)
 
-    # ---- Step 7: Report ----
-    print("  [7/8] Generating report...")
+    # ---- Step 8: Validate PoCs ----
+    print("  [ 8/10] Validating PoCs (forge build + test)...")
+    enhanced = validate_pocs(enhanced, config)
+
+    # Update confidence for validated PoCs
+    for f in enhanced:
+        if f.poc_validated:
+            f.confidence = 1.0
+        elif f.poc_compiles:
+            f.confidence = max(f.confidence, 0.95)
+
+    # ---- Step 9: Report ----
+    print("  [ 9/10] Generating report...")
     report = AuditReport(findings=enhanced, tools_run=tools_run)
 
     # Pretty summary table
     c, h, m, l, i = len(report.critical), len(report.high), len(report.medium), len(report.low), len(report.informational)
+    poc_validated = sum(1 for f in enhanced if f.poc_validated)
+    poc_compiled = sum(1 for f in enhanced if f.poc_compiles)
     print("  ┌──────────────────┬───────┐")
     print("  │ Severity         │ Count │")
     print("  ├──────────────────┼───────┤")
@@ -687,6 +714,8 @@ def main():
     print("  ├──────────────────┼───────┤")
     print(f"  │ Total            │  {report.total:>3}  │")
     print("  └──────────────────┴───────┘")
+    if poc_validated or poc_compiled:
+        print(f"  PoCs: {poc_validated} verified, {poc_compiled} compile")
 
     # Print top findings
     top = report.critical + report.high + report.medium
@@ -710,8 +739,12 @@ def main():
     print(terminal_report)
     sys.stdout.flush()
 
+    # Generate checklist coverage section
+    checklist_items = load_checklist()
+    checklist_section = generate_checklist_report(checklist_coverage, checklist_items)
+
     # Generate markdown report for file / GitHub
-    full_report = generate_report(report, config, attack_chains=attack_chains)
+    full_report = generate_report(report, config, attack_chains=attack_chains, checklist_section=checklist_section)
 
     output_path = args.output or config.get("report", {}).get("output", "results/report.md")
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -719,7 +752,7 @@ def main():
     log.info(f"Report saved: {output_path}")
 
     # Generate SARIF for GitHub Security Tab
-    print("  [8/8] Generating SARIF output...")
+    print("  [10/10] Generating SARIF output...")
     sarif_path = save_sarif(report, config)
     log.info(f"SARIF saved: {sarif_path}")
 

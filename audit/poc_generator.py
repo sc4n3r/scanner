@@ -90,7 +90,22 @@ def generate_poc(finding: Finding, config: dict) -> str:
 
     source = _read_source(finding.file)
 
+    # Query Solodit for similar findings with PoC examples
+    solodit_context = ""
+    try:
+        from .solodit_client import get_similar_findings, format_as_context
+        similar = get_similar_findings(
+            finding_title=finding.title,
+            severity=finding.severity,
+            max_results=2,
+        )
+        if similar:
+            solodit_context = "\n" + format_as_context(similar) + "\n"
+    except Exception:
+        pass
+
     prompt = f"""You are an expert smart contract security researcher. Generate an executable Foundry test that demonstrates this vulnerability as a Proof of Concept.
+{solodit_context}
 
 ## Vulnerability
 - **Title:** {finding.title}

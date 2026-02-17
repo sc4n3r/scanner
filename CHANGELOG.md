@@ -2,6 +2,22 @@
 
 All notable changes to sc4n3r will be documented in this file.
 
+## [3.0.0] - 2026-02-17
+
+### Added — $40/mo Pro Features
+- **Solodit-powered AI analysis** — 49K+ real audit findings as context for smarter false positive filtering and attack scenario generation
+- **Audit checklist engine** — 380+ systematic security checks from Cyfrin's audit checklist, mirroring professional audit methodology
+- **Validated PoCs** — AI-generated Foundry PoCs are now compiled (`forge build`) and executed (`forge test`) with iterative AI repair (max 3 retries)
+- **15 custom Slither detectors** — AST-level detection targeting real-world exploit patterns: spot price reliance, missing slippage/deadline, unprotected initializers, storage collisions, single-step ownership, unconstrained mint, zero-address checks, read-only reentrancy, first depositor attack, fee-on-transfer, oracle staleness, flashloan callback, approval race, selfdestruct in implementation
+- **Confidence scoring** — findings scored 0.0-1.0 based on evidence level (static=0.7, AI-confirmed=0.9, PoC-validated=1.0)
+- **Solodit API client** — queries real-world findings as few-shot examples for AI analysis and PoC generation
+
+### Improved
+- **AI accuracy** — Solodit real-world findings as context dramatically improve false positive filtering
+- **PoC quality** — validated PoCs with compilation + execution verification, iterative repair loop
+- **Pipeline** — expanded from 8 to 10 steps: added checklist analysis and PoC validation
+- **Report** — checklist coverage section, confidence scores, PoC validation status (Verified/Compiles/Generated)
+
 ## [2.0.0] - 2026-02-17
 
 ### Added — Professional-Grade Analysis

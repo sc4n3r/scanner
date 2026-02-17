@@ -41,6 +41,10 @@ RUN solc-select install 0.8.20 && solc-select use 0.8.20
 # Application
 COPY audit/ /app/audit/
 COPY entrypoint.py /app/entrypoint.py
+COPY pyproject.toml /app/pyproject.toml
+
+# Install sc4n3r as a package (registers Slither plugin for custom detectors)
+RUN pip3 install --no-cache-dir /app
 
 # Gemini API key (passed at runtime or build time)
 ARG GEMINI_API_KEY=""

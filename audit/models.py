@@ -46,6 +46,11 @@ class Finding:
 
     # PoC
     poc_code: str = ""                   # Generated Foundry test PoC
+    poc_compiles: bool = False           # Whether the PoC compiles with forge build
+    poc_validated: bool = False          # Whether the PoC passes (exploit confirmed)
+
+    # Confidence scoring (Hound-inspired)
+    confidence: float = 0.0             # 0.0-1.0 — static=0.7, AI-confirmed=0.9, PoC-validated=1.0
 
     # Attack chain
     chain_id: str = ""                   # ID of attack chain this finding belongs to
