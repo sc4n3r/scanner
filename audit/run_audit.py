@@ -19,10 +19,18 @@ import yaml
 
 from .aggregator import aggregate_findings, filter_by_severity
 from .ai_enhancer import enhance_findings
+from .attack_chain import detect_attack_chains
+from .centralization import analyze_centralization
+from .defi_analyzer import analyze_defi
 from .github_inline import post_review_comments
 from .models import AuditReport, Finding
+from .owasp_mapping import map_all_findings
 from .parsers import parse_aderyn, parse_mythril, parse_slither, parse_solhint
+from .poc_generator import generate_pocs
 from .report_generator import generate_pr_comment, generate_report, generate_terminal_report
+from .sarif_generator import save_sarif
+from .token_compliance import analyze_tokens
+from .upgrade_safety import analyze_upgrades
 
 logging.basicConfig(
     level=logging.INFO,
@@ -358,6 +366,14 @@ def load_config(config_path: str) -> dict:
                 config["ai"]["analyze_only"] = ac["analyze_severities"]
             if "max_findings" in ac:
                 config["ai"]["max_findings"] = ac["max_findings"]
+            if "protocol_description" in ac:
+                config["ai"]["protocol_description"] = ac["protocol_description"]
+            if "provider" in ac:
+                config["ai"]["provider"] = ac["provider"]
+        if "analyzers" in user:
+            config.setdefault("analyzers", {})
+            for analyzer_name, analyzer_cfg in user["analyzers"].items():
+                config["analyzers"].setdefault(analyzer_name, {}).update(analyzer_cfg)
         if "setup_commands" in user:
             config["setup_commands"] = user["setup_commands"]
 
@@ -587,8 +603,8 @@ def main():
     print(f"  [1/5] Compiling ({config['project_type']})...")
     compile_project(config["project_type"], config)
 
-    # ---- Step 2: Run tools ----
-    print("  [2/5] Scanning...")
+    # ---- Step 2: Run static analysis tools ----
+    print("  [2/8] Running static analysis...")
     all_findings: list[Finding] = []
     tools_run: list[str] = []
 
@@ -603,8 +619,36 @@ def main():
             all_findings.extend(findings)
             tools_run.append(name)
 
-    # ---- Step 3: Aggregate ----
-    print("  [3/5] Processing results...")
+    # ---- Step 3: Run sc4n3r custom analyzers ----
+    print("  [3/8] Running advanced analysis...")
+    analyzers = config.get("analyzers", {})
+
+    if analyzers.get("defi", {}).get("enabled", True):
+        defi_findings = analyze_defi(config)
+        if defi_findings:
+            all_findings.extend(defi_findings)
+            tools_run.append("sc4n3r-DeFi")
+
+    if analyzers.get("centralization", {}).get("enabled", True):
+        centralization_findings = analyze_centralization(config)
+        if centralization_findings:
+            all_findings.extend(centralization_findings)
+            tools_run.append("sc4n3r-Centralization")
+
+    if analyzers.get("upgrade_safety", {}).get("enabled", True):
+        upgrade_findings = analyze_upgrades(config)
+        if upgrade_findings:
+            all_findings.extend(upgrade_findings)
+            tools_run.append("sc4n3r-Upgrade")
+
+    if analyzers.get("token_compliance", {}).get("enabled", True):
+        token_findings = analyze_tokens(config)
+        if token_findings:
+            all_findings.extend(token_findings)
+            tools_run.append("sc4n3r-Token")
+
+    # ---- Step 4: Aggregate ----
+    print("  [4/8] Aggregating results...")
     deduped = aggregate_findings(all_findings)
 
     hide = config.get("hide_severities", [])
@@ -612,12 +656,22 @@ def main():
         deduped = filter_by_severity(deduped, hide)
         log.info(f"After severity filter: {len(deduped)}")
 
-    # ---- Step 4: AI enhancement ----
-    print("  [4/5] Analyzing findings...")
+    # ---- Step 5: Map to standards ----
+    print("  [5/8] Mapping to OWASP / SWC standards...")
+    deduped = map_all_findings(deduped)
+
+    # ---- Step 6: AI enhancement ----
+    print("  [6/8] AI analysis...")
     enhanced = enhance_findings(deduped, config)
 
-    # ---- Step 5: Report ----
-    print("  [5/5] Generating report...")
+    # ---- Step 6b: Attack chains ----
+    attack_chains = detect_attack_chains(enhanced, config)
+
+    # ---- Step 6c: Generate PoCs ----
+    enhanced = generate_pocs(enhanced, config)
+
+    # ---- Step 7: Report ----
+    print("  [7/8] Generating report...")
     report = AuditReport(findings=enhanced, tools_run=tools_run)
 
     # Pretty summary table
@@ -657,16 +711,21 @@ def main():
     sys.stdout.flush()
 
     # Generate markdown report for file / GitHub
-    full_report = generate_report(report, config)
+    full_report = generate_report(report, config, attack_chains=attack_chains)
 
     output_path = args.output or config.get("report", {}).get("output", "results/report.md")
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     Path(output_path).write_text(full_report, encoding="utf-8")
     log.info(f"Report saved: {output_path}")
 
+    # Generate SARIF for GitHub Security Tab
+    print("  [8/8] Generating SARIF output...")
+    sarif_path = save_sarif(report, config)
+    log.info(f"SARIF saved: {sarif_path}")
+
     # Post to GitHub
     if not args.no_github and config.get("github", {}).get("post_comment", True):
-        pr_comment = generate_pr_comment(report, config)
+        pr_comment = generate_pr_comment(report, config, attack_chains=attack_chains)
         post_to_github(pr_comment, config)
         if config.get("github", {}).get("inline_comments", True) and GITHUB_TOKEN:
             post_review_comments(report, GITHUB_TOKEN)

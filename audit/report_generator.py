@@ -1,6 +1,7 @@
 """
 sc4n3r — Markdown Report Generator
-Produces full audit reports and condensed PR comments.
+Produces professional-grade audit reports with executive summary,
+OWASP coverage, priority matrix, attack chains, and PoCs.
 """
 
 from datetime import datetime
@@ -32,6 +33,42 @@ def _severity_emoji(severity: str) -> str:
     }.get(severity.lower(), "ℹ️")
 
 
+def _risk_grade(report: AuditReport) -> tuple[str, str]:
+    """Calculate overall risk grade (A-F) and description."""
+    c = len(report.critical)
+    h = len(report.high)
+    m = len(report.medium)
+
+    score = c * 25 + h * 10 + m * 3
+    if score == 0:
+        return "A", "Excellent — no significant security issues detected"
+    if score <= 5:
+        return "B", "Good — minor issues only, low risk"
+    if score <= 15:
+        return "C", "Moderate — some issues require attention before deployment"
+    if score <= 30:
+        return "D", "Concerning — significant issues found, remediation required"
+    return "F", "Critical — severe vulnerabilities detected, do not deploy"
+
+
+def _priority_bucket(finding: Finding) -> str:
+    """Determine remediation priority bucket."""
+    sev = finding.severity.lower()
+    expl = finding.exploitability.lower() if finding.exploitability else ""
+
+    if sev == "critical":
+        return "Fix Now"
+    if sev == "high":
+        if expl == "high":
+            return "Fix Now"
+        return "Fix Before Deploy"
+    if sev == "medium":
+        if expl == "high":
+            return "Fix Before Deploy"
+        return "Consider Fixing"
+    return "Accepted Risk"
+
+
 # ---------------------------------------------------------------------------
 # Finding formatters
 # ---------------------------------------------------------------------------
@@ -43,11 +80,20 @@ def _format_finding_detail(finding: Finding, label: str) -> str:
 
     parts.append(f"### [{label}] {finding.title}\n")
     parts.append(f"**Location:** `{finding.location}`  ")
-    if finding.swc:
-        parts.append(
-            f"**SWC:** [{finding.swc}](https://swcregistry.io/docs/{finding.swc})"
-        )
+    if finding.swc_id or finding.swc:
+        swc = finding.swc_id or finding.swc
+        parts.append(f"**SWC:** [{swc}](https://swcregistry.io/docs/{swc})")
+    if finding.owasp_category:
+        parts.append(f"**OWASP:** {finding.owasp_category} — {finding.owasp_title}")
     parts.append("")
+
+    # Priority bucket
+    bucket = _priority_bucket(finding)
+    if bucket:
+        parts.append(f"**Priority:** {bucket}  ")
+        if finding.exploitability:
+            parts.append(f"**Exploitability:** {finding.exploitability}")
+        parts.append("")
 
     # Description — prefer AI impact over raw tool description
     if finding.ai_analyzed and finding.impact and finding.impact != "N/A":
@@ -75,6 +121,12 @@ def _format_finding_detail(finding: Finding, label: str) -> str:
         else:
             parts.append(f"```diff\n{fix}\n```\n")
 
+    # PoC
+    if finding.poc_code:
+        parts.append("<details>\n<summary>Proof of Concept (Foundry Test)</summary>\n")
+        parts.append(f"```solidity\n{finding.poc_code}\n```\n")
+        parts.append("</details>\n")
+
     parts.append("---\n")
     return "\n".join(parts)
 
@@ -85,21 +137,178 @@ def _format_finding_line(finding: Finding) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Executive summary
+# ---------------------------------------------------------------------------
+
+
+def _generate_executive_summary(report: AuditReport, config: dict) -> str:
+    """Generate professional executive summary section."""
+    s: list[str] = []
+    grade, grade_desc = _risk_grade(report)
+
+    s.append("## Executive Summary\n")
+
+    # Risk grade
+    grade_colors = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+    s.append(f"**Overall Risk Grade: {grade_colors.get(grade, '')} {grade}** — {grade_desc}\n")
+
+    # Key metrics
+    s.append("| Metric | Value |")
+    s.append("|--------|-------|")
+    s.append(f"| Tools Run | {', '.join(report.tools_run) if report.tools_run else 'N/A'} |")
+    s.append(f"| Raw Findings | {report.raw_count} |")
+    s.append(f"| After Deduplication | {report.total + report.false_positive_count} |")
+    if report.false_positive_count:
+        s.append(f"| AI False Positives | {report.false_positive_count} |")
+    s.append(f"| Confirmed Findings | {report.total} |")
+    s.append("")
+
+    # One-paragraph summary
+    c, h, m = len(report.critical), len(report.high), len(report.medium)
+    if c > 0:
+        s.append(
+            f"This scan identified **{c} critical** and **{h} high** severity "
+            f"issue(s) that require immediate remediation before deployment. "
+            f"Critical findings represent direct exploitation vectors that could "
+            f"lead to loss of funds or protocol takeover.\n"
+        )
+    elif h > 0:
+        s.append(
+            f"This scan identified **{h} high** severity issue(s) that should be "
+            f"addressed before deployment. While no critical exploits were found, "
+            f"the high-severity findings represent significant security risks.\n"
+        )
+    elif m > 0:
+        s.append(
+            f"No critical or high severity issues were found. **{m} medium** "
+            f"severity issue(s) were identified that should be reviewed and "
+            f"addressed as part of standard security hardening.\n"
+        )
+    else:
+        s.append(
+            "No significant security issues were detected. The codebase follows "
+            "security best practices for the patterns analyzed.\n"
+        )
+
+    return "\n".join(s)
+
+
+# ---------------------------------------------------------------------------
+# OWASP coverage matrix
+# ---------------------------------------------------------------------------
+
+
+def _generate_owasp_coverage(findings: list[Finding]) -> str:
+    """Generate OWASP SC Top 10 coverage matrix."""
+    from .owasp_mapping import OWASP_SC_TOP_10, get_owasp_coverage
+
+    coverage = get_owasp_coverage(findings)
+    s: list[str] = []
+    s.append("## OWASP Smart Contract Top 10 Coverage\n")
+    s.append("| # | Category | Checked | Findings |")
+    s.append("|---|----------|---------|----------|")
+
+    for code in sorted(coverage.keys()):
+        info = coverage[code]
+        checked = "✅" if info["checked"] else "—"
+        count = info["finding_count"]
+        count_str = f"**{count}**" if count > 0 else "0"
+        s.append(f"| {code} | {info['title']} | {checked} | {count_str} |")
+
+    s.append("")
+    return "\n".join(s)
+
+
+# ---------------------------------------------------------------------------
+# Priority matrix
+# ---------------------------------------------------------------------------
+
+
+def _generate_priority_matrix(report: AuditReport) -> str:
+    """Generate remediation priority matrix."""
+    all_findings = report.critical + report.high + report.medium + report.low
+    if not all_findings:
+        return ""
+
+    buckets: dict[str, list[Finding]] = {
+        "Fix Now": [],
+        "Fix Before Deploy": [],
+        "Consider Fixing": [],
+        "Accepted Risk": [],
+    }
+    for f in all_findings:
+        bucket = _priority_bucket(f)
+        buckets[bucket].append(f)
+
+    s: list[str] = []
+    s.append("## Remediation Priority\n")
+
+    for bucket_name, bucket_findings in buckets.items():
+        if not bucket_findings:
+            continue
+        emoji = {"Fix Now": "🚨", "Fix Before Deploy": "⚠️", "Consider Fixing": "📋", "Accepted Risk": "📝"}
+        s.append(f"### {emoji.get(bucket_name, '')} {bucket_name} ({len(bucket_findings)})\n")
+        for f in bucket_findings:
+            sev_emoji = _severity_emoji(f.severity)
+            s.append(f"- {sev_emoji} **{f.title}** — `{f.location}`")
+        s.append("")
+
+    return "\n".join(s)
+
+
+# ---------------------------------------------------------------------------
+# Attack chains section
+# ---------------------------------------------------------------------------
+
+
+def _generate_attack_chains(chains: list[dict]) -> str:
+    """Generate attack chain section for the report."""
+    if not chains:
+        return ""
+
+    s: list[str] = []
+    s.append("## Attack Chains\n")
+    s.append("*Multiple findings that combine into higher-severity attack paths:*\n")
+
+    for chain in chains:
+        sev = chain.get("severity", "high")
+        emoji = _severity_emoji(sev)
+        s.append(f"### {emoji} {chain.get('title', 'Attack Chain')}\n")
+        s.append(f"**Combined Severity:** {sev.upper()}  ")
+        s.append(f"**Findings Involved:** {', '.join(chain.get('findings', []))}\n")
+        if chain.get("attack_path"):
+            s.append(f"**Attack Path:**\n{chain['attack_path']}\n")
+        if chain.get("combined_impact"):
+            s.append(f"**Combined Impact:** {chain['combined_impact']}\n")
+        s.append("---\n")
+
+    return "\n".join(s)
+
+
+# ---------------------------------------------------------------------------
 # Full report (saved to file + artifact)
 # ---------------------------------------------------------------------------
 
 
-def generate_report(report: AuditReport, config: dict) -> str:
+def generate_report(
+    report: AuditReport, config: dict,
+    attack_chains: list[dict] | None = None,
+) -> str:
     """Generate the full markdown audit report."""
     today = datetime.now().strftime("%B %d, %Y")
     s: list[str] = []
 
     # Header
     s.append("# Smart Contract Security Audit Report\n")
-    s.append(f"**Generated:** {today}\n")
+    s.append(f"**Generated:** {today}  ")
+    s.append(f"**Scanner:** sc4n3r v2.0.0  ")
+    s.append(f"**Tools:** {', '.join(report.tools_run) if report.tools_run else 'N/A'}\n")
+
+    # Executive summary
+    s.append(_generate_executive_summary(report, config))
 
     # Summary table
-    s.append("## Summary\n")
+    s.append("## Findings Summary\n")
     s.append("| Severity | Count |")
     s.append("|----------|-------|")
     s.append(f"| 🔴 Critical | {len(report.critical)} |")
@@ -110,6 +319,18 @@ def generate_report(report: AuditReport, config: dict) -> str:
     if report.false_positive_count:
         s.append(f"\n*AI filtered {report.false_positive_count} false positive(s).*")
     s.append("")
+
+    # Priority matrix
+    priority = _generate_priority_matrix(report)
+    if priority:
+        s.append(priority)
+
+    # Attack chains
+    if attack_chains:
+        s.append(_generate_attack_chains(attack_chains))
+
+    # OWASP coverage
+    s.append(_generate_owasp_coverage(report.findings))
 
     # Detailed sections: critical / high / medium
     for sev_name, prefix, findings in [
@@ -144,7 +365,7 @@ def generate_report(report: AuditReport, config: dict) -> str:
         s.append("**No security issues found.**\n")
 
     s.append("---")
-    s.append("*Generated by [sc4n3r](https://sc4n3r.app)*")
+    s.append("*Generated by [sc4n3r](https://sc4n3r.app) — Smart Contract Security Scanner*")
     return "\n".join(s)
 
 
@@ -153,11 +374,19 @@ def generate_report(report: AuditReport, config: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_pr_comment(report: AuditReport, config: dict) -> str:
+def generate_pr_comment(
+    report: AuditReport, config: dict,
+    attack_chains: list[dict] | None = None,
+) -> str:
     """Generate a detailed PR comment with findings."""
     s: list[str] = []
+    grade, grade_desc = _risk_grade(report)
 
     s.append("## 🔒 Security Audit Report\n")
+
+    # Risk grade
+    grade_colors = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+    s.append(f"**Risk Grade: {grade_colors.get(grade, '')} {grade}** — {grade_desc}\n")
 
     if report.has_critical or report.has_high:
         s.append("⚠️ **Action Required:** Critical / High severity issues found.\n")
@@ -170,6 +399,15 @@ def generate_pr_comment(report: AuditReport, config: dict) -> str:
     s.append(f"| 🟡 Medium | {len(report.medium)} |")
     s.append(f"| ⚪ Low / Info | {len(report.low) + len(report.informational)} |")
     s.append("")
+
+    # Attack chains (compact)
+    if attack_chains:
+        s.append("### ⛓️ Attack Chains Detected\n")
+        for chain in attack_chains[:3]:
+            sev = chain.get("severity", "high")
+            emoji = _severity_emoji(sev)
+            s.append(f"- {emoji} **{chain.get('title', 'Attack Chain')}** — {chain.get('combined_impact', '')}")
+        s.append("")
 
     # Full detail for critical & high
     for sev_name, prefix, findings in [
@@ -211,7 +449,7 @@ def generate_pr_comment(report: AuditReport, config: dict) -> str:
         s.append("**No security issues found.**\n")
 
     s.append("---")
-    s.append("*Powered by [sc4n3r](https://sc4n3r.app)*")
+    s.append("*Powered by [sc4n3r](https://sc4n3r.app) — Smart Contract Security Scanner*")
     return "\n".join(s)
 
 
@@ -223,6 +461,11 @@ def generate_pr_comment(report: AuditReport, config: dict) -> str:
 def generate_terminal_report(report: AuditReport, config: dict) -> str:
     """Generate a clean, terminal-friendly audit report."""
     s: list[str] = []
+
+    # Risk grade
+    grade, grade_desc = _risk_grade(report)
+    s.append(f"  Risk Grade: {grade} — {grade_desc}")
+    s.append("")
 
     # Detailed sections: critical / high / medium
     for sev_name, prefix, findings in [
@@ -238,6 +481,8 @@ def generate_terminal_report(report: AuditReport, config: dict) -> str:
         for i, f in enumerate(findings, 1):
             s.append(f"  [{prefix}-{i}] {f.title}")
             s.append(f"  Location: {f.location}")
+            if f.owasp_category:
+                s.append(f"  OWASP: {f.owasp_category} — {f.owasp_title}")
             s.append("")
 
             if f.ai_analyzed and f.impact and f.impact != "N/A":

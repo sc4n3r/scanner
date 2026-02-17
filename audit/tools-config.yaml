@@ -24,7 +24,10 @@ ai:
     - medium
   max_findings: 25
   timeout: 90
+  # Optional: describe your protocol for context-aware analysis
+  # protocol_description: "A lending protocol that allows users to deposit ETH and borrow stablecoins"
 
+# External static analysis tools
 tools:
   slither:
     enabled: true
@@ -39,6 +42,17 @@ tools:
     enabled: true
     timeout: 120
 
+# sc4n3r custom analyzers
+analyzers:
+  defi:
+    enabled: true
+  centralization:
+    enabled: true
+  upgrade_safety:
+    enabled: true
+  token_compliance:
+    enabled: true
+
 severity_map:
   "High": "high"
   "Medium": "medium"
@@ -49,6 +63,7 @@ severity_map:
 
 report:
   output: "results/report.md"
+  sarif_output: "results/sc4n3r.sarif"
 
 github:
   post_comment: true

@@ -114,39 +114,76 @@ def _parse_json_response(text: str) -> dict:
 
 def _analyze_finding(
     finding: Finding, api_key: str, provider: str, model: str, timeout: int,
+    protocol_context: str = "",
 ) -> None:
-    """Use AI to analyse a single finding. Mutates the Finding in-place."""
+    """Use AI to analyse a single finding. Mutates the Finding in-place.
+
+    Uses chain-of-thought prompting with few-shot examples for higher accuracy.
+    """
     code = _read_code_context(finding.file, finding.line)
 
-    prompt = f"""You are a smart contract security auditor. Analyze this scanner finding.
+    context_section = ""
+    if protocol_context:
+        context_section = f"""
+## Protocol Context
+{protocol_context}
+"""
 
+    prompt = f"""You are a senior smart contract security auditor with deep expertise in DeFi exploits, MEV, flash loans, and cross-contract attacks. Analyze this scanner finding using careful step-by-step reasoning.
+{context_section}
 ## Finding
 - **Tool:** {finding.tool}
 - **Detector:** {finding.id}
 - **Title:** {finding.title}
-- **Severity:** {finding.severity}
+- **Severity reported:** {finding.severity}
 - **Location:** {finding.file}:{finding.line}
 - **Description:** {finding.description}
+{f'- **OWASP:** {finding.owasp_category} — {finding.owasp_title}' if finding.owasp_category else ''}
 
 ## Source Code
 ```solidity
 {code}
 ```
 
-Determine whether this is genuinely exploitable or a false positive.
-Consider:
-1. Can an attacker exploit this given the surrounding code?
-2. Are there protections already in place (require, modifiers, access control)?
-3. What is the realistic step-by-step attack scenario?
-4. What is the maximum financial / protocol impact?
+## Analysis Instructions (Think Step by Step)
+
+**Step 1 — Context Analysis:**
+Read the code carefully. Identify the function, its visibility, its modifiers, and what state it reads/writes.
+
+**Step 2 — Protection Assessment:**
+List all protections present: require statements, access control modifiers (onlyOwner, onlyRole), reentrancy guards, input validation, timelocks, etc.
+
+**Step 3 — Exploitability Check:**
+Given the protections found, can an external attacker (not the owner/admin) actually trigger this vulnerability? Consider:
+- Is the function externally callable?
+- Are the required preconditions realistic?
+- Could a flash loan or multi-transaction attack bypass protections?
+
+**Step 4 — Verdict:**
+Based on Steps 1-3, classify as exploitable or false positive with confidence level.
+
+## Few-Shot Examples
+
+**Example 1 — TRUE POSITIVE (reentrancy):**
+Finding: "reentrancy-eth" on a withdraw() function that sends ETH before updating balances, with no reentrancy guard.
+→ is_false_positive: false, confidence: high — No nonReentrant modifier, ETH sent via call before state update.
+
+**Example 2 — FALSE POSITIVE (reentrancy with guard):**
+Finding: "reentrancy-eth" on a withdraw() function that uses nonReentrant modifier and checks-effects-interactions pattern.
+→ is_false_positive: true, confidence: high — nonReentrant modifier prevents reentrancy, and CEI pattern followed.
+
+**Example 3 — TRUE POSITIVE (access control):**
+Finding: "missing-authorization" on a setPrice() function marked as public with no onlyOwner modifier.
+→ is_false_positive: false, confidence: high — Anyone can set the price, enabling oracle manipulation.
 
 Respond with ONLY valid JSON (no markdown fences, no extra text):
 {{
   "is_false_positive": <true or false>,
   "confidence": "<high|medium|low>",
-  "reasoning": "<2-3 sentence explanation>",
+  "reasoning": "<2-4 sentence chain-of-thought explanation referencing the code>",
+  "exploitability": "<high|medium|low>",
   "attack_scenario": "<numbered steps if exploitable, 'N/A' if false positive>",
-  "impact": "<specific impact, e.g. 'All ETH in the vault can be drained'>",
+  "impact": "<specific financial/protocol impact, e.g. 'All ETH in the vault (~$X) can be drained in a single transaction'>",
   "suggested_fix": "<diff-style code fix showing the change needed>"
 }}"""
 
@@ -163,6 +200,7 @@ Respond with ONLY valid JSON (no markdown fences, no extra text):
     finding.attack_scenario = data.get("attack_scenario", "")
     finding.impact = data.get("impact", "")
     finding.suggested_fix = data.get("suggested_fix", "")
+    finding.exploitability = data.get("exploitability", "")
     finding.ai_analyzed = True
 
 
@@ -201,10 +239,13 @@ def enhance_findings(findings: list[Finding], config: dict) -> list[Finding]:
         log.info("AI: no findings at configured severities")
         return findings
 
+    # Load protocol context if provided
+    protocol_context = ai.get("protocol_description", "")
+
     log.info(f"AI: analyzing {len(to_analyze)} finding(s)")
     for i, finding in enumerate(to_analyze, 1):
         log.info(f"  [{i}/{len(to_analyze)}] {finding.title[:60]}")
-        _analyze_finding(finding, api_key, provider, model, timeout)
+        _analyze_finding(finding, api_key, provider, model, timeout, protocol_context)
 
     analyzed = sum(1 for f in findings if f.ai_analyzed)
     fp = sum(1 for f in findings if f.is_false_positive)

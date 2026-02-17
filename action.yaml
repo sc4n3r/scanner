@@ -1,5 +1,5 @@
 name: "sc4n3r Security Scanner"
-description: "Automated Smart Contract Security Audit"
+description: "Professional-grade automated smart contract security audit with AI-powered analysis, DeFi-specific detection, and PoC generation"
 author: "Haidar Ali"
 
 branding:
@@ -30,6 +30,9 @@ outputs:
   report_path:
     description: "Path to generated report.md"
     value: "results/report.md"
+  sarif_path:
+    description: "Path to generated SARIF file"
+    value: "results/sc4n3r.sarif"
   critical_count:
     description: "Number of critical findings"
   high_count:

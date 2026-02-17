@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      security-events: write
 
     steps:
       - name: Checkout
@@ -23,3 +24,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           api_key: ${{ secrets.SC4N3R_API_KEY }}
+
+      - name: Upload SARIF to GitHub Security Tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/sc4n3r.sarif
+          category: sc4n3r

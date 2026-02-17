@@ -36,11 +36,25 @@ mythril:
   targets: []
     # - "src/Vault.sol"
 
-# AI enhancement (requires GEMINI_API_KEY)
+# sc4n3r custom analyzers (all enabled by default)
+# analyzers:
+#   defi:
+#     enabled: true         # Flash loan, oracle, MEV detection
+#   centralization:
+#     enabled: true         # Admin key, timelock, multisig checks
+#   upgrade_safety:
+#     enabled: true         # Proxy, storage collision, initializer checks
+#   token_compliance:
+#     enabled: true         # ERC-20/721/1155/4626 compliance
+
+# AI enhancement (requires GEMINI_API_KEY or ANTHROPIC_API_KEY)
 ai:
   enabled: true
+  # provider: "gemini"     # or "claude"
   analyze_severities:
     - "critical"
     - "high"
     - "medium"
   max_findings: 25
+  # Describe your protocol for context-aware AI analysis
+  # protocol_description: "A lending protocol that allows users to deposit ETH and borrow stablecoins"

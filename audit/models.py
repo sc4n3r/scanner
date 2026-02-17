@@ -30,6 +30,26 @@ class Finding:
     suggested_fix: str = ""
     ai_analyzed: bool = False
 
+    # Standards mapping
+    owasp_category: str = ""             # e.g. "SC01", "SC08"
+    owasp_title: str = ""                # e.g. "Access Control Vulnerabilities"
+    swc_id: str = ""                     # e.g. "SWC-107" (separate from tool-reported swc)
+
+    # Priority scoring
+    priority_score: float = 0.0          # Computed: severity × exploitability × fix_complexity
+    priority_bucket: str = ""            # "Fix Now" / "Fix Before Deploy" / "Consider Fixing" / "Accepted Risk"
+    exploitability: str = ""             # high / medium / low
+    fix_complexity: str = ""             # simple / moderate / complex
+
+    # Source module (for new analyzers)
+    source_module: str = ""              # "defi", "centralization", "upgrade", "token", "static"
+
+    # PoC
+    poc_code: str = ""                   # Generated Foundry test PoC
+
+    # Attack chain
+    chain_id: str = ""                   # ID of attack chain this finding belongs to
+
     @property
     def contract_name(self) -> str:
         """Extract contract name from file path"""
